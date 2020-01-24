@@ -41,6 +41,12 @@ mv /etc/sentora/panel/modules/ftp_management/code/controller.ext.php controller.
 mv hotfix_controller.ext.php /etc/sentora/panel/modules/ftp_management/code/controller.ext.php
 chown root:root /etc/sentora/panel/modules/ftp_management/code/controller.ext.php
 chmod 777 /etc/sentora/panel/modules/ftp_management/code/controller.ext.php
+wget "https://github.com/sentora/sentora-core/raw/1.0.4/modules/sub_domains/module.xml" -O /etc/sentora/panel/modules/sub_domains/module.xml
+wget "https://github.com/sentora/sentora-core/raw/1.0.4/modules/sub_domains/module.zpm" -O /etc/sentora/panel/modules/sub_domains/module.zpm
+wget "https://github.com/sentora/sentora-core/raw/1.0.4/modules/sub_domains/code/controller.ext.php" -O /etc/sentora/panel/modules/sub_domains/code/controller.ext.php
+wget "https://github.com/sentora/sentora-core/raw/1.0.4/modules/sub_domains/code/webservice.ext.php" -O /etc/sentora/panel/modules/sub_domains/code/webservice.ext.php
+wget "https://github.com/sentora/sentora-core/raw/1.0.4/modules/sub_domains/hooks/OnAfterDeleteClient.hook.php" -O /etc/sentora/panel/modules/sub_domains/hooks/OnAfterDeleteClient.hook.php
+
 
 # CGI Patch
 disable_file() {
@@ -48,6 +54,56 @@ disable_file() {
 }
 
 if [[ "$OS" = "CentOs" ]]; then
+    HTTP_CONF_PATH="/etc/httpd/conf/httpd.conf"
+    HTTP_VARS_PATH="/etc/sysconfig/httpd"
+    HTTP_SERVICE="httpd"
+    HTTP_USER="apache"
+    HTTP_GROUP="apache"
+    if [[ "$VER" = "7" ]]; then
+        # Disable extra modules in centos 7
+        disable_file /etc/httpd/conf.modules.d/01-cgi.conf
+        disable_file /etc/httpd/conf.modules.d/00-lua.conf
+        disable_file /etc/httpd/conf.modules.d/00-dav.conf
+        service httpd restart
+    else
+        disable_file /etc/httpd/conf.d/welcome.conf
+        disable_file /etc/httpd/conf.d/webalizer.conf
+        # Disable more extra modules in centos 6.x /etc/httpd/httpd.conf dav/ldap/cgi/proxy_ajp
+	    sed -i "s|LoadModule suexec_module modules|#LoadModule suexec_module modules|" "$HTTP_CONF_PATH"
+	    sed -i "s|LoadModule cgi_module modules|#LoadModule cgi_module modules|" "$HTTP_CONF_PATH"
+	    sed -i "s|LoadModule dav_module modules|#LoadModule dav_module modules|" "$HTTP_CONF_PATH"
+	    sed -i "s|LoadModule dav_fs_module modules|#LoadModule dav_fs_module modules|" "$HTTP_CONF_PATH"
+	    sed -i "s|LoadModule proxy_ajp_module modules|#LoadModule proxy_ajp_module modules|" "$HTTP_CONF_PATH"
+	    service httpd restart
+    fi
+fi
+
+#Suhosin patch for sentora 1.0.0
+
+SUHOSIN_VERSION="0.9.37.1"
+wget -nv -O suhosin.zip https://github.com/stefanesser/suhosin/archive/$SUHOSIN_VERSION.zip
+unzip -q suhosin.zip
+rm -f suhosin.zip
+cd suhosin-$SUHOSIN_VERSION
+phpize 
+./configure 
+make
+make install 
+cd ..
+rm -rf suhosin-$SUHOSIN_VERSION
+
+## SQL patch now
+# get mysql root password, check it works or ask it
+mysqlpassword=$(cat /etc/sentora/panel/cnf/db.php | grep "pass =" | sed -s "s|.*pass \= '\(.*\)';.*|\1|")
+while ! mysql -u root -p$mysqlpassword -e ";" ; do
+read -p "Can't connect to mysql, please give root password or press ctrl-C to abort: " mysqlpassword
+done
+echo -e "Connection mysql ok"
+wget -nv -O  update.sql https://raw.githubusercontent.com/sentora/sentora-installers/master/preconf/sentora-update/1-0-3/sql/update.sql #need url
+mysql -u root -p"$mysqlpassword" < update.sql
+
+echo "We are done system patched updater $SENTORA_UPDATER_VERSION"
+
     HTTP_CONF_PATH="/etc/httpd/conf/httpd.conf"
     HTTP_VARS_PATH="/etc/sysconfig/httpd"
     HTTP_SERVICE="httpd"
