@@ -434,12 +434,12 @@ elif [[ "$OS" = "Ubuntu" ]]; then
     cp -R "/etc/apt/sources.list.d/*" "/etc/apt/sources.list.d.save" &> /dev/null
     rm -rf "/etc/apt/sources.list/*"
     cp "/etc/apt/sources.list" "/etc/apt/sources.list.save"
-	cat > /etc/apt/sources.list <<EOF
-	#Depots main restricted universe multiverse
-	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main restricted universe multiverse
-	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted universe multiverse
-	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-updates main restricted universe multiverse
-	EOF
+cat > /etc/apt/sources.list <<EOF
+#Depots main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-updates main restricted universe multiverse
+EOF
 	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
 	apt-get update
 	apt-get -y install software-properties-common
@@ -447,23 +447,23 @@ elif [[ "$OS" = "Ubuntu" ]]; then
 	add-apt-repository -y ppa:ondrej/php
 	fi
 
-elif [[ "$OS" = "debian" ]]; then 
     # Update the enabled Aptitude repositories
-    echo -ne "\nUpdating Aptitude Repos: " >/dev/tty
+    echo -ne "\nUpdating Aptitude elif [[ "$OS" = "debian" ]]; then 
+Repos: " >/dev/tty
 
     mkdir -p "/etc/apt/sources.list.d.save"
     cp -R "/etc/apt/sources.list.d/*" "/etc/apt/sources.list.d.save" &> /dev/null
     rm -rf "/etc/apt/sources.list/*"
     cp "/etc/apt/sources.list" "/etc/apt/sources.list.save"
 
-        cat > /etc/apt/sources.list <<EOF
-	deb http://httpredir.debian.org/debian $(lsb_release -sc) main
-	deb-src http://httpredir.debian.org/debian $(lsb_release -sc) main
-	deb http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-	deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-	deb http://security.debian.org/ $(lsb_release -sc)/updates main
-	deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
-	EOF
+cat > /etc/apt/sources.list <<EOF
+deb http://httpredir.debian.org/debian $(lsb_release -sc) main
+deb-src http://httpredir.debian.org/debian $(lsb_release -sc) main
+deb http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
+deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
+deb http://security.debian.org/ $(lsb_release -sc)/updates main
+deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
+EOF
 fi
 
 #--- List all already installed packages (may help to debug)
