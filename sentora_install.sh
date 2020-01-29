@@ -18,7 +18,7 @@
 #
 # Supported Operating Systems: 
 # CentOS 6.*/7.* Minimal, 
-# Ubuntu server 12.04/14.04 
+# Ubuntu server 12.04/14.04/16.4/18.04 
 # Debian 7.*/8.* 
 # 32bit and 64bit
 #
@@ -27,6 +27,7 @@
 #   Pascal Peyremorte (ppeyremorte@sentora.org)
 #   Mehdi Blagui 
 #   Kevin Andrews (kevin@zvps.uk)
+#   Andy Kimpe
 #
 #   and all those who participated to this and to previous installers.
 #   Thanks to all.
@@ -71,7 +72,7 @@ ARCH=$(uname -m)
 echo "Detected : $OS  $VER  $ARCH"
 
 if [[ "$OS" = "CentOs" && ("$VER" = "6" || "$VER" = "7" ) || 
-      "$OS" = "Ubuntu" && ("$VER" = "12.04" || "$VER" = "14.04" ) || 
+      "$OS" = "Ubuntu" && ("$VER" = "12.04" || "$VER" = "14.04" || "$VER" = "16.04" || "$VER" = "16.04" ) || 
       "$OS" = "debian" && ("$VER" = "7" || "$VER" = "8" ) ]] ; then
     echo "Ok."
 else
@@ -133,7 +134,11 @@ elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
     
     DB_PCKG="mysql-server"
     HTTP_PCKG="apache2"
-    PHP_PCKG="apache2-mod-php5"
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+    PHP_PCKG="apache2-mod-php5.6"
+	else
+	PHP_PCKG="apache2-mod-php5"
+	fi
     BIND_PCKG="bind9"
 fi
   
@@ -356,17 +361,8 @@ fi
 echo -e "\n-- Updating repositories and packages sources"
 if [[ "$OS" = "CentOs" ]]; then
 #EPEL Repo Install
-  EPEL_BASE_URL="http://dl.fedoraproject.org/pub/epel/$VER/$ARCH";
-  if  [[ "$VER" = "7" ]]; then
-     EPEL_FILE=$(wget -q -O- "$EPEL_BASE_URL/Packages/e/" | grep -oP '(?<=href=")epel-release.*(?=">)')
-     wget "$EPEL_BASE_URL/Packages/e/$EPEL_FILE"
-  else
-     EPEL_FILE=$(wget -q -O- "$EPEL_BASE_URL/" | grep -oP '(?<=href=")epel-release.*(?=">)')
-     wget "$EPEL_BASE_URL/$EPEL_FILE"
-  fi
-  $PACKAGE_INSTALLER -y install epel-release*.rpm
-  rm "$EPEL_FILE"
-    
+$PACKAGE_INSTALLER -y install epel-release*.rpm
+
     #To fix some problems of compatibility use of mirror centos.org to all users
     #Replace all mirrors by base repos to avoid any problems.
     sed -i 's|mirrorlist=http://mirrorlist.centos.org|#mirrorlist=http://mirrorlist.centos.org|' "/etc/yum.repos.d/CentOS-Base.repo"
@@ -396,8 +392,14 @@ if [[ "$OS" = "CentOs" ]]; then
     setenforce 0
 
     # Stop conflicting services and iptables to ensure all services will work
+    # centos  7 using systemctl
+    if  [[ "$VER" = "7" ]]; then
+        systemctl  stop sendmail.service
+        systemctl  disabble sendmail.service
+    else 
     service sendmail stop
     chkconfig sendmail off
+    fi
 
     # disable firewall
     if  [[ "$VER" = "7" ]]; then
@@ -405,9 +407,16 @@ if [[ "$OS" = "CentOs" ]]; then
     else 
         FIREWALL_SERVICE="iptables"
     fi
+    # centos  7 using systemctl
+    if  [[ "$VER" = "7" ]]; then
+        systemctl  save "$FIREWALL_SERVICE".service
+        systemctl  stop "$FIREWALL_SERVICE".service
+        systemctl  disable "$FIREWALL_SERVICE".service
+    else
     service "$FIREWALL_SERVICE" save
     service "$FIREWALL_SERVICE" stop
     chkconfig "$FIREWALL_SERVICE" off
+    fi
 
     # Removal of conflicting packages prior to Sentora installation.
     if (inst bind-chroot) ; then 
@@ -417,7 +426,29 @@ if [[ "$OS" = "CentOs" ]]; then
         $PACKAGE_REMOVER qpid-cpp-client
     fi
 
-elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then 
+elif [[ "$OS" = "Ubuntu" ]]; then 
+    # Update the enabled Aptitude repositories
+    echo -ne "\nUpdating Aptitude Repos: " >/dev/tty
+
+    mkdir -p "/etc/apt/sources.list.d.save"
+    cp -R "/etc/apt/sources.list.d/*" "/etc/apt/sources.list.d.save" &> /dev/null
+    rm -rf "/etc/apt/sources.list/*"
+    cp "/etc/apt/sources.list" "/etc/apt/sources.list.save"
+	cat > /etc/apt/sources.list <<EOF
+	#Depots main restricted universe multiverse
+	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main restricted universe multiverse
+	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted universe multiverse
+	deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-updates main restricted universe multiverse
+	EOF
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+	apt-get update
+	apt-get -y install software-properties-common
+	add-apt-repository -y ppa:ondrej/apache2
+	add-apt-repository -y ppa:ondrej/php
+	fi
+	
+fi
+elif [[ "$OS" = "debian" ]]; then 
     # Update the enabled Aptitude repositories
     echo -ne "\nUpdating Aptitude Repos: " >/dev/tty
 
@@ -426,56 +457,13 @@ elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
     rm -rf "/etc/apt/sources.list/*"
     cp "/etc/apt/sources.list" "/etc/apt/sources.list.save"
 
-    if [ "$VER" = "14.04" ]; then
         cat > /etc/apt/sources.list <<EOF
-#Depots main restricted
-deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc)-updates main restricted universe multiverse
-EOF
-    elif [ "$VER" = "8"  ]; then
-        cat > /etc/apt/sources.list <<EOF
-deb http://httpredir.debian.org/debian $(lsb_release -sc) main
-deb-src http://httpredir.debian.org/debian $(lsb_release -sc) main
-
-deb http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-
-deb http://security.debian.org/ $(lsb_release -sc)/updates main
-deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
-EOF
-    elif [ "$VER" = "7" ]; then
-        cat > /etc/apt/sources.list <<EOF
-deb http://httpredir.debian.org/debian $(lsb_release -sc) main
-deb-src http://httpredir.debian.org/debian $(lsb_release -sc) main
-
-deb http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
-
-deb http://security.debian.org/ $(lsb_release -sc)/updates main
-deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
-EOF
-    else
-        cat > /etc/apt/sources.list <<EOF
-#Depots main restricted
-deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) main restricted
-deb http://security.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted
-deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates main restricted
- 
-deb-src http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) main restricted
-deb-src http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates main restricted
-deb-src http://security.ubuntu.com/ubuntu $(lsb_release -sc)-security main restricted
-
-#Depots Universe Multiverse 
-deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) universe multiverse
-deb http://security.ubuntu.com/ubuntu $(lsb_release -sc)-security universe multiverse
-deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates universe multiverse
-
-deb-src http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) universe multiverse
-deb-src http://security.ubuntu.com/ubuntu $(lsb_release -sc)-security universe multiverse
-deb-src http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates universe multiverse
-EOF
-    fi
+	deb http://httpredir.debian.org/debian $(lsb_release -sc) main
+	deb-src http://httpredir.debian.org/debian $(lsb_release -sc) main
+	deb http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
+	deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
+	deb http://security.debian.org/ $(lsb_release -sc)/updates main
+	deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
 fi
 
 #--- List all already installed packages (may help to debug)
@@ -727,7 +715,25 @@ add_local_domain() {
 
 if [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
     # Disable the DPKG prompts before we run the software install to enable fully automated install.
+	
+	# solve ubuntu 16.04 and 18.04 mysql service not start
+	# https://bugs.launchpad.net/ubuntu/+source/mysql-5.7/+bug/1571865
+	# using mysql community server work
+	# https://dev.mysql.com/downloads/
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+	echo "mysql-apt-config mysql-apt-config/unsupported-platform select abort" | /usr/bin/debconf-set-selections
+	echo "mysql-apt-config mysql-apt-config/repo-codename   select $(lsb_release -sc)" | /usr/bin/debconf-set-selections
+	echo "mysql-apt-config mysql-apt-config/select-tools select" | /usr/bin/debconf-set-selections
+	echo "mysql-apt-config mysql-apt-config/repo-distro select ubuntu" | /usr/bin/debconf-set-selections
+	echo "mysql-apt-config mysql-apt-config/select-server select mysql-5.7" | /usr/bin/debconf-set-selections
+	echo "mysql-apt-config mysql-apt-config/select-product select Apply" | /usr/bin/debconf-set-selections
+	export DEBIAN_FRONTEND=noninteractive
+	wget https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
+	dpkg -i mysql-apt-config_0.8.14-1_all.deb
+	rmm -f mysql-apt-config_0.8.14-1_all.deb
+	else
     export DEBIAN_FRONTEND=noninteractive
+	fi
 fi
 
 #--- MySQL
@@ -899,7 +905,7 @@ if [[ "$OS" = "CentOs" ]]; then
         systemctl start dovecot.service
     else
         chkconfig dovecot on
-        /etc/init.d/dovecot start
+        service dovecot start
     fi
 fi
 
@@ -973,7 +979,7 @@ if [[ "$OS" = "CentOs" ]]; then
     sed -i "s|DocumentRoot \"/var/www/html\"|DocumentRoot $PANEL_PATH/panel|" "$HTTP_CONF_PATH"
 elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
     # disable completely sites-enabled/000-default.conf
-    if [[ "$VER" = "14.04" || "$VER" = "8" ]]; then 
+    if [[ "$VER" = "14.04" || "$VER" = "8" || "$VER" == "16.04" || "$VER" == "18.04" ]]; then 
         sed -i "s|IncludeOptional sites-enabled|#&|" "$HTTP_CONF_PATH"
     else
         sed -i "s|Include sites-enabled|#&|" "$HTTP_CONF_PATH"
@@ -991,7 +997,9 @@ fi
 
 # adjustments for apache 2.4
 if [[ ("$OS" = "CentOs" && "$VER" = "7") || 
-      ("$OS" = "Ubuntu" && "$VER" = "14.04") || 
+      ("$OS" = "Ubuntu" && "$VER" = "14.04") ||  
+      ("$OS" = "Ubuntu" && "$VER" = "16.04") ||  
+      ("$OS" = "Ubuntu" && "$VER" = "18.04") || 
       ("$OS" = "debian" && "$VER" = "8") ]] ; then 
     # Order deny,allow / Deny from all   ->  Require all denied
     sed -i 's|Order deny,allow|Require all denied|I'  $PANEL_CONF/apache/httpd.conf
@@ -1021,13 +1029,33 @@ if [[ "$OS" = "CentOs" ]]; then
     PHP_INI_PATH="/etc/php.ini"
     PHP_EXT_PATH="/etc/php.d"
 elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+	$PACKAGE_INSTALLER libapache2-mod-php5.6 php5.6-common php5.6-cli php5.6-mysql php5.6-gd php5.6-mcrypt php5.6-curl php-pear php5.6-imap php5.6-xmlrpc php5.6-xsl php5.6-intl php php-dev php5.6-dev
+	update-alternatives --set php /usr/bin/php5.6
+	update-alternatives --set phar /usr/bin/phar5.6
+	update-alternatives --set phar.phar /usr/bin/phar.phar5.6
+	update-alternatives --set phpize /usr/bin/phpize5.6
+	update-alternatives --set php-config /usr/bin/php-config5.6
+	a2enmod php7.0
+	a2enmod php7.1
+	a2enmod php7.2
+	a2enmod php7.3
+	a2enmod php7.4
+	a2enmod php5.6
+	phpenmod -v 5.6 mcrypt
+	else
     $PACKAGE_INSTALLER libapache2-mod-php5 php5-common php5-cli php5-mysql php5-gd php5-mcrypt php5-curl php-pear php5-imap php5-xmlrpc php5-xsl php5-intl
+	else
     if [ "$VER" = "14.04" ]; then
         php5enmod mcrypt  # missing in the package for Ubuntu 14, is this needed for debian 8 as well?
-    else
+    elif [ "$VER" = "12.04" ]; then
         $PACKAGE_INSTALLER php5-suhosin
     fi
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+	PHP_INI_PATH="/etc/php/5.6/apache2/php.ini"
+	else
     PHP_INI_PATH="/etc/php5/apache2/php.ini"
+	fi
 fi
 # Setup php upload dir
 mkdir -p $PANEL_DATA/temp
@@ -1044,7 +1072,11 @@ if [[ "$OS" = "CentOs" ]]; then
     # Remove session & php values from apache that cause override
     sed -i "/php_value/d" /etc/httpd/conf.d/php.conf
 elif [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
+	if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+	sed -i "s|;session.save_path = \"/var/lib/php\"|session.save_path = \"$PANEL_DATA/sessions\"|" $PHP_INI_PATH
+	else
     sed -i "s|;session.save_path = \"/var/lib/php5\"|session.save_path = \"$PANEL_DATA/sessions\"|" $PHP_INI_PATH
+	fi
 fi
 sed -i "/php_value/d" $PHP_INI_PATH
 echo "session.save_path = $PANEL_DATA/sessions;">> $PHP_INI_PATH
@@ -1056,11 +1088,15 @@ sed -i "s|;upload_tmp_dir =|upload_tmp_dir = $PANEL_DATA/temp/|" $PHP_INI_PATH
 # Disable php signature in headers to hide it from hackers
 sed -i "s|expose_php = On|expose_php = Off|" $PHP_INI_PATH
 
-# Build suhosin for PHP 5.x which is required by Sentora. 
-if [[ "$OS" = "CentOs" || "$OS" = "debian" || ( "$OS" = "Ubuntu" && "$VER" = "14.04") ]] ; then
+# Build suhosin for PHP 5.x which is required by Sentora.
+if [[ "$OS" = "CentOs" || "$OS" = "debian" || ( "$OS" = "Ubuntu" && "$VER" = "14.04" || "$VER" == "16.04" || "$VER" == "18.04") ]] ; then
     echo -e "\n# Building suhosin"
     if [[ "$OS" = "Ubuntu" || "$OS" = "debian" ]]; then
+		if [[ "$VER" == "16.04" || "$VER" == "18.04" ]]; then
+        $PACKAGE_INSTALLER php5.6-dev php-dev
+		else
         $PACKAGE_INSTALLER php5-dev
+		fi
     fi
     SUHOSIN_VERSION="0.9.37.1"
     wget -nv -O suhosin.zip https://github.com/stefanesser/suhosin/archive/$SUHOSIN_VERSION.zip
