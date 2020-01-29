@@ -446,9 +446,9 @@ EOF
 	add-apt-repository -y ppa:ondrej/apache2
 	add-apt-repository -y ppa:ondrej/php
 	fi
-
+ elif [[ "$OS" = "debian" ]]; then 
     # Update the enabled Aptitude repositories
-    echo -ne "\nUpdating Aptitude elif [[ "$OS" = "debian" ]]; then 
+    echo -ne "\nUpdating Aptitude
 Repos: " >/dev/tty
 
     mkdir -p "/etc/apt/sources.list.d.save"
