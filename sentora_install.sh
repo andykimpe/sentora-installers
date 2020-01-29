@@ -446,8 +446,7 @@ elif [[ "$OS" = "Ubuntu" ]]; then
 	add-apt-repository -y ppa:ondrej/apache2
 	add-apt-repository -y ppa:ondrej/php
 	fi
-	
-fi
+
 elif [[ "$OS" = "debian" ]]; then 
     # Update the enabled Aptitude repositories
     echo -ne "\nUpdating Aptitude Repos: " >/dev/tty
