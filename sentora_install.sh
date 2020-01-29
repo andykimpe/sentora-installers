@@ -463,6 +463,7 @@ elif [[ "$OS" = "debian" ]]; then
 	deb-src http://httpredir.debian.org/debian $(lsb_release -sc)-updates main
 	deb http://security.debian.org/ $(lsb_release -sc)/updates main
 	deb-src http://security.debian.org/ $(lsb_release -sc)/updates main
+	EOF
 fi
 
 #--- List all already installed packages (may help to debug)
